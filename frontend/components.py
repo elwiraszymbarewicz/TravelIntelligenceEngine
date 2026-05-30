@@ -4,11 +4,6 @@ import tkintermapview
 
 
 class ModernDropdownMultiselect(ctk.CTkFrame):
-    """
-    Natywny, wysuwany panel wielokrotnego wyboru.
-    Dynamicznie wyświetla wybrane miasta w kolejności alfabetycznej na przycisku.
-    """
-
     def __init__(self, parent, cities_list, **kwargs):
         super().__init__(parent, fg_color="transparent", **kwargs)
 
@@ -16,7 +11,6 @@ class ModernDropdownMultiselect(ctk.CTkFrame):
         self.checkbox_vars = {}
         self.is_open = False
 
-        # Przycisk sterujący wysuwaniem menu (tekst startowy)
         self.btn_toggle = ctk.CTkButton(
             self, text="Wybierz stolice... ▼",
             font=("Segoe UI", 12, "bold"),
@@ -25,17 +19,13 @@ class ModernDropdownMultiselect(ctk.CTkFrame):
         )
         self.btn_toggle.pack(fill="x")
 
-        # Nowoczesny, przewijany kontener CustomTkinter (domyślnie ukryty)
         self.list_frame = ctk.CTkScrollableFrame(
             self, height=220, fg_color="#ffffff",
             border_width=1, border_color="#bdc3c7"
         )
 
-        # Generowanie nowoczesnych checkboxów z funkcją śledzenia zmian
         for city in self.cities_list:
             self.checkbox_vars[city] = tk.BooleanVar(value=False)
-
-            # Podpięcie obserwatora (trace), który wywoła aktualizację tekstu przy każdym kliknięciu
             self.checkbox_vars[city].trace_add("write", lambda *args: self.update_button_text())
 
             cb = ctk.CTkCheckBox(
@@ -46,15 +36,12 @@ class ModernDropdownMultiselect(ctk.CTkFrame):
             cb.pack(fill="x", anchor="w", pady=4, padx=5)
 
     def update_button_text(self):
-        """Dynamicznie aktualizuje napis na przycisku na podstawie zaznaczonych miast."""
-        selected = self.get_selected_cities()  # Funkcja już zwraca posortowaną alfabetycznie listę
-
+        selected = self.get_selected_cities()
         if not selected:
             suffix = " ▲" if self.is_open else " ▼"
             self.btn_toggle.configure(text="Wybierz stolice..." + suffix)
             return
 
-        # Zabezpieczenie przed zbyt długim tekstem na przycisku
         if len(selected) <= 3:
             button_text = ", ".join(selected)
         else:
@@ -67,33 +54,25 @@ class ModernDropdownMultiselect(ctk.CTkFrame):
         if self.is_open:
             self.list_frame.pack_forget()
             self.is_open = False
-            self.update_button_text()
         else:
             self.list_frame.pack(fill="x", pady=(5, 0))
             self.is_open = True
-            self.update_button_text()
+        self.update_button_text()
 
     def close_dropdown(self):
         if self.is_open:
             self.toggle_dropdown()
 
     def get_selected_cities(self):
-        # Filtrujemy i zwracamy listę - dzięki self.cities_list jest ona naturalnie alfabetyczna
         return [city for city in self.cities_list if self.checkbox_vars[city].get()]
 
 
 class PremiumMapView(ctk.CTkFrame):
-    """
-    Mapa skupiona na Europie, obsługująca interaktywne detale
-    oraz specjalne wyróżnienie dla najlepszego kierunku.
-    """
-
     def __init__(self, parent, **kwargs):
         super().__init__(parent, corner_radius=15, **kwargs)
 
         self.map_widget = tkintermapview.TkinterMapView(self, corner_radius=15)
         self.map_widget.pack(fill="both", expand=True, padx=2, pady=2)
-
         self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png")
         self.map_widget.set_position(53.0000, 18.0000)
         self.map_widget.set_zoom(5)
@@ -120,10 +99,7 @@ class PremiumMapView(ctk.CTkFrame):
 
         if is_best:
             new_marker = self.map_widget.set_marker(
-                lat, lon,
-                marker_color_circle="#ffffff",
-                marker_color_outside="#2980b9",
-                command=self.on_marker_click
+                lat, lon, marker_color_circle="#ffffff", marker_color_outside="#2980b9", command=self.on_marker_click
             )
         else:
             if iaw_score >= 75:
@@ -134,10 +110,7 @@ class PremiumMapView(ctk.CTkFrame):
                 marker_color = "#e74c3c"
 
             new_marker = self.map_widget.set_marker(
-                lat, lon,
-                marker_color_circle="#ffffff",
-                marker_color_outside=marker_color,
-                command=self.on_marker_click
+                lat, lon, marker_color_circle="#ffffff", marker_color_outside=marker_color, command=self.on_marker_click
             )
 
         new_marker.data = info_text
