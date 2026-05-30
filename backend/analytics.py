@@ -1,8 +1,9 @@
 import pandas as pd
+import numpy as np
 import requests
 import random
 
-# Globalny słownik mapujący stolice na identyfikatory Booking.com oraz kody lotnisk
+# Kompletny słownik mapujący wszystkie stolice europejskie
 CITIES_CONFIG = {
     # Europa Środkowo-Wschodnia i Bałkany
     "Warszawa": {"dest_id": "-534433", "airport": "WAW", "lat": 52.2297, "lon": 21.0122},
@@ -52,14 +53,14 @@ CITIES_CONFIG = {
     "Lekozja": {"dest_id": "-2104365", "airport": "LCA", "lat": 35.1856, "lon": 33.3823},
     "Valletta": {"dest_id": "-2054365", "airport": "MLA", "lat": 35.8989, "lon": 14.5146},
 
-    # Mikroństwa i Regiony Specjalne
+    # Mikropaństwa i Regiony Specjalne
     "Andora": {"dest_id": "-111111", "airport": "ALV", "lat": 42.5063, "lon": 1.5218},
     "Monako": {"dest_id": "-123123", "airport": "NCE", "lat": 43.7384, "lon": 7.4246},
     "San Marino": {"dest_id": "-456456", "airport": "RMI", "lat": 43.9424, "lon": 12.4578},
     "Watykan": {"dest_id": "-126693", "airport": "ROM", "lat": 41.9029, "lon": 12.4534},
     "Vaduz": {"dest_id": "-234234", "airport": "ZRH", "lat": 47.1410, "lon": 9.5215},
 
-    # Twój ulubiony kierunek wyspiarski jako bonus analityczny
+    # Kierunek wyspiarski
     "Funchal": {"dest_id": "-2164475", "airport": "FNC", "lat": 32.6500, "lon": -16.9080}
 }
 
@@ -71,21 +72,17 @@ API_HEADERS = {
 
 def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
     """
-    Pobiera surowe dane z API dla danego miasta i terminów,
-    a następnie przetwarza je do czystych struktur Pandas DataFrame.
+    Pobiera surowe dane z API Booking dla danego miasta i terminów,
+    a następnie transformuje je do obiektu Pandas DataFrame.
     """
     if city_name not in CITIES_CONFIG:
         return None
 
     config = CITIES_CONFIG[city_name]
-
-    # URL-e do endpointów wyszukiwania hoteli i minimalnych cen lotów
     hotel_url = "https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels"
     flight_url = "https://booking-com15.p.rapidapi.com/api/v1/flights/getMinPrice"
 
-    # -------------------------------------------------------------
-    # 1. POBIERANIE I PRZETWARZANIE DANYCH HOTELOWYCH (PANDAS)
-    # -------------------------------------------------------------
+    # 1. PRZETWARZANIE BAZY HOTELOWEJ (PANDAS)
     hotel_params = {
         "dest_id": config["dest_id"],
         "search_type": "CITY",
@@ -113,28 +110,23 @@ def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
                     "review_count": prop.get('reviewCount', 0)
                 })
     except Exception as e:
-        print(f"Błąd pobierania hoteli dla {city_name} (używam danych symulowanych): {e}")
+        print(f"Błąd połączenia z API hoteli dla {city_name}: {e}")
 
-    # Jeśli API nie zwróciło danych, generujemy dane typu "Mock" (bezpieczeństwo projektu)
+    # Fallback (Mock data): ochrona przed wygasaniem limitów darmowych kluczy
     if not hotel_list:
         hotel_list = [
             {
                 "name": f"Mock Hotel {city_name} {i}",
-                "price": random.uniform(1500, 6000),
+                "price": random.uniform(1200, 5500),
                 "stars": random.choice([3, 4, 5]),
-                "review_count": random.randint(50, 3000)
-            } for i in range(10)
+                "review_count": random.randint(40, 2800)
+            } for i in range(12)
         ]
 
-    # Zamiana listy słowników na zaawansowany obiekt DataFrame biblioteki Pandas
     df_hotels = pd.DataFrame(hotel_list)
-    # Czyszczenie danych za pomocą Pandas - pozbywamy się ewentualnych pustych rekordów cenowych
     df_hotels = df_hotels.dropna(subset=['price'])
 
-    # -------------------------------------------------------------
-    # 2. POBIERANIE I PRZETWARZANIE DANYCH LOTNICZYCH
-    # -------------------------------------------------------------
-    # Symulujemy lot z lotniska w Berlinie (BER) lub Warszawie (WAW) jako bazy startowej
+    # 2. PRZETWARZANIE CEN TRANSPORTU LOTNICZEGO
     flight_params = {
         "from_airport": "BER",
         "to_airport": config["airport"],
@@ -147,14 +139,12 @@ def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
         response = requests.get(flight_url, headers=API_HEADERS, params=flight_params, timeout=10)
         if response.status_code == 200:
             json_data = response.json()
-            # Wyciągamy minimalną cenę lotu z JSON-a
             min_flight_price = json_data.get('data', {}).get('minPrice', {}).get('value')
     except Exception as e:
-        pass
+        print(f"Błąd połączenia z API lotów dla {city_name}: {e}")
 
     if min_flight_price is None:
-        # Losowa, realistyczna cena lotu w przypadku braku odpowiedzi z API
-        min_flight_price = random.uniform(250, 1200)
+        min_flight_price = random.uniform(200, 1100)
 
     return {
         "hotels_df": df_hotels,
@@ -163,10 +153,51 @@ def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
     }
 
 
-# Mały test poprawności działania modułu
+def calculate_iaw_index(city_data: dict, budget_weight: float, comfort_weight: float):
+    """
+    Wylicza zintegrowany Indeks Atrakcyjności Wyjazdu (IAW) oraz
+    przeprowadza detekcję anomalii statystycznych z użyciem struktur NumPy.
+    """
+    df_hotels = city_data["hotels_df"]
+    flight_price = city_data["min_flight_price"]
+
+    # Konwersja kolumn Pandas DataFrame do natywnych wektorów NumPy
+    prices = df_hotels["price"].to_numpy()
+    stars = df_hotels["stars"].to_numpy()
+    reviews = df_hotels["review_count"].to_numpy()
+
+    # Wyliczanie statystyk opisowych za pomocą NumPy
+    mean_hotel_price = np.mean(prices)
+    mean_stars = np.mean(stars)
+    mean_reviews = np.mean(reviews)
+    std_hotel_price = np.std(prices)
+
+    # Detekcja anomalii rynkowych na podstawie rozrzutu i progów cenowych
+    is_anomaly = bool(std_hotel_price > 2200 or mean_hotel_price > 4800)
+
+    # Obliczanie składowych wskaźnika optymalizacyjnego
+    budget_score = 12000 / (flight_price + mean_hotel_price)
+    comfort_score = (mean_stars * 20) + (min(mean_reviews, 4000) / 100)
+
+    total_weights = budget_weight + comfort_weight
+    if total_weights == 0:
+        total_weights = 1
+
+    # Średnia ważona zaimplementowana w NumPy
+    raw_iaw = ((budget_score * budget_weight) + (comfort_score * comfort_weight)) / total_weights
+    final_iaw = float(np.clip(raw_iaw, 10.0, 100.0))
+
+    return {
+        "iaw_score": round(final_iaw, 1),
+        "mean_hotel_price": round(mean_hotel_price, 2),
+        "min_flight_price": round(flight_price, 2),
+        "is_anomaly": is_anomaly,
+        "coords": city_data["coords"]
+    }
+
+
 if __name__ == "__main__":
-    print("Testowe uruchomienie modułu analitycznego Pandas...")
-    wynik = fetch_city_data("Berlin", "2026-09-03", "2026-09-13")
-    print(f"\nMinimalna cena lotu: {wynik['min_flight_price']} PLN")
-    print("\nTabela hoteli (Pandas DataFrame) - pierwsze 3 wiersze:")
-    print(wynik["hotels_df"].head(3).to_string())
+    print("Uruchomiono samodzielny test modułu analitycznego...")
+    test_data = fetch_city_data("Warszawa", "2026-09-03", "2026-09-13")
+    res = calculate_iaw_index(test_data, 3.0, 3.0)
+    print(f"Wynik testowy IAW dla Warszawy: {res['iaw_score']}/100")
