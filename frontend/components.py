@@ -1,94 +1,144 @@
 import tkinter as tk
-from tkinter import ttk
+import customtkinter as ctk
 import tkintermapview
 
 
-class CapitalSelector(tk.LabelFrame):
+class ModernDropdownMultiselect(ctk.CTkFrame):
     """
-    Komponent z przewijaną listą (Scrollbar), zawierający
-    checkboxy dla wszystkich 44 stolic europejskich.
+    Natywny, wysuwany panel wielokrotnego wyboru.
+    Dynamicznie wyświetla wybrane miasta w kolejności alfabetycznej na przycisku.
     """
 
     def __init__(self, parent, cities_list, **kwargs):
-        super().__init__(parent, text=" Wybierz stolice do analizy ", padx=10, pady=10, **kwargs)
+        super().__init__(parent, fg_color="transparent", **kwargs)
 
-        # Tworzymy płótno (canvas) i scrollbar, aby zmieścić 44 miasta bez rozciągania okna
-        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0, width=200, height=250)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.cities_list = sorted(cities_list)
+        self.checkbox_vars = {}
+        self.is_open = False
 
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        # Przycisk sterujący wysuwaniem menu (tekst startowy)
+        self.btn_toggle = ctk.CTkButton(
+            self, text="Wybierz stolice... ▼",
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#34495e", hover_color="#2c3e50",
+            command=self.toggle_dropdown, height=38
+        )
+        self.btn_toggle.pack(fill="x")
+
+        # Nowoczesny, przewijany kontener CustomTkinter (domyślnie ukryty)
+        self.list_frame = ctk.CTkScrollableFrame(
+            self, height=220, fg_color="#ffffff",
+            border_width=1, border_color="#bdc3c7"
         )
 
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        # Generowanie nowoczesnych checkboxów z funkcją śledzenia zmian
+        for city in self.cities_list:
+            self.checkbox_vars[city] = tk.BooleanVar(value=False)
 
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+            # Podpięcie obserwatora (trace), który wywoła aktualizację tekstu przy każdym kliknięciu
+            self.checkbox_vars[city].trace_add("write", lambda *args: self.update_button_text())
 
-        # Słownik, w którym będziemy trzymać stan każdego checkboxa (True/False)
-        self.checkbox_vars = {}
+            cb = ctk.CTkCheckBox(
+                self.list_frame, text=city, variable=self.checkbox_vars[city],
+                font=("Segoe UI", 11), text_color="#2c3e50",
+                hover_color="#3498db", corner_radius=4
+            )
+            cb.pack(fill="x", anchor="w", pady=4, padx=5)
 
-        # Automatycznie generujemy checklistę na podstawie bazy danych z backendu
-        for city in sorted(cities_list):
-            var = tk.BooleanVar(value=False)
-            self.checkbox_vars[city] = var
-            cb = ttk.Checkbutton(self.scrollable_frame, text=city, variable=var)
-            cb.pack(anchor="w", pady=2)
+    def update_button_text(self):
+        """Dynamicznie aktualizuje napis na przycisku na podstawie zaznaczonych miast."""
+        selected = self.get_selected_cities()  # Funkcja już zwraca posortowaną alfabetycznie listę
+
+        if not selected:
+            suffix = " ▲" if self.is_open else " ▼"
+            self.btn_toggle.configure(text="Wybierz stolice..." + suffix)
+            return
+
+        # Zabezpieczenie przed zbyt długim tekstem na przycisku
+        if len(selected) <= 3:
+            button_text = ", ".join(selected)
+        else:
+            button_text = f"{selected[0]}, {selected[1]}, {selected[2]} + {len(selected) - 3}"
+
+        suffix = " ▲" if self.is_open else " ▼"
+        self.btn_toggle.configure(text=button_text + suffix)
+
+    def toggle_dropdown(self):
+        if self.is_open:
+            self.list_frame.pack_forget()
+            self.is_open = False
+            self.update_button_text()
+        else:
+            self.list_frame.pack(fill="x", pady=(5, 0))
+            self.is_open = True
+            self.update_button_text()
+
+    def close_dropdown(self):
+        if self.is_open:
+            self.toggle_dropdown()
 
     def get_selected_cities(self):
-        """Zwraca listę nazw tylko tych miast, które użytkownik zaznaczył."""
-        return [city for city, var in self.checkbox_vars.items() if var.get()]
+        # Filtrujemy i zwracamy listę - dzięki self.cities_list jest ona naturalnie alfabetyczna
+        return [city for city in self.cities_list if self.checkbox_vars[city].get()]
 
 
-class LiveMapView(tk.LabelFrame):
+class PremiumMapView(ctk.CTkFrame):
     """
-    Komponent żywej, interaktywnej mapy OpenStreetMap
-    zintegrowany bezpośrednio z oknem Tkintera.
+    Mapa skupiona na Europie, obsługująca interaktywne detale
+    oraz specjalne wyróżnienie dla najlepszego kierunku.
     """
 
     def __init__(self, parent, **kwargs):
-        super().__init__(parent, text=" Mapa Atrakcyjności Wyjazdów (Live) ", padx=5, pady=5, **kwargs)
+        super().__init__(parent, corner_radius=15, **kwargs)
 
-        # Inicjalizacja widoku mapy
-        self.map_widget = tkintermapview.TkinterMapView(self, corner_radius=0)
-        self.map_widget.pack(fill="both", expand=True)
+        self.map_widget = tkintermapview.TkinterMapView(self, corner_radius=15)
+        self.map_widget.pack(fill="both", expand=True, padx=2, pady=2)
 
-        # Ustawiamy startowy widok na środek Europy i optymalny zoom
-        self.map_widget.set_position(52.5200, 13.4050)  # Współrzędne Berlina jako geometryczny środek
-        self.map_widget.set_zoom(4)
-
-        # Lista do śledzenia postawionych markerów (pinezek), by móc je łatwo czyścić
+        self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png")
+        self.map_widget.set_position(53.0000, 18.0000)
+        self.map_widget.set_zoom(5)
         self.markers = []
 
     def clear_markers(self):
-        """Usuwa wszystkie dotychczasowe pinezki z mapy przed nowym zapytaniem."""
         for marker in self.markers:
             marker.delete()
         self.markers.clear()
 
-    def add_city_marker(self, city_name, lat, lon, iaw_score, price, flight):
-        """
-        Stawia dynamiczny marker na mapie. Kolor i opis zależą
-        od wyników zwróconych przez algorytm NumPy.
-        """
-        # Dobieramy kolor tekstu na podstawie wskaźnika IAW (Optymalizacja wizualna)
-        if iaw_score >= 75:
-            marker_color = "#2ecc71"  # Zielony (Super cel)
-        elif iaw_score >= 45:
-            marker_color = "#e67e22"  # Pomarańczowy (Średni)
-        else:
-            marker_color = "#e74c3c"  # Czerwony (Nieopłacalny/Drogi)
+    def on_marker_click(self, marker):
+        tk.messagebox.showinfo("Raport Rynkowy", marker.data)
 
-        text_info = f"{city_name}\nIAW: {iaw_score}/100\nHotel śr: {price} PLN\nLot: {flight} PLN"
-
-        # Tworzenie fizycznego markera na obiekcie mapy
-        new_marker = self.map_widget.set_marker(
-            lat, lon,
-            text=text_info,
-            marker_color_circle=marker_color,
-            text_color=marker_color
+    def add_city_marker(self, city_name, lat, lon, iaw_score, price, flight, is_best=False):
+        prefix = "🏆 REKOMENDACJA SYSTEMOWA 🏆\n" if is_best else ""
+        info_text = (
+            f"{prefix}"
+            f"Kierunek: {city_name}\n"
+            f"───────────────────\n"
+            f"★ Wskaźnik IAW: {iaw_score}/100\n"
+            f"✈ Średnia cena lotu: {int(flight)} PLN\n"
+            f"🏨 Średni koszt hotelu: {int(price)} PLN"
         )
+
+        if is_best:
+            new_marker = self.map_widget.set_marker(
+                lat, lon,
+                marker_color_circle="#ffffff",
+                marker_color_outside="#2980b9",
+                command=self.on_marker_click
+            )
+        else:
+            if iaw_score >= 75:
+                marker_color = "#2ecc71"
+            elif iaw_score >= 45:
+                marker_color = "#f39c12"
+            else:
+                marker_color = "#e74c3c"
+
+            new_marker = self.map_widget.set_marker(
+                lat, lon,
+                marker_color_circle="#ffffff",
+                marker_color_outside=marker_color,
+                command=self.on_marker_click
+            )
+
+        new_marker.data = info_text
         self.markers.append(new_marker)

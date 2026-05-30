@@ -1,115 +1,169 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+import customtkinter as ctk
+from tkinter import messagebox
 import requests
 import sys
 import os
 
-# Poprawka ścieżki, aby Python widział pliki z folderu backend
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from backend.analytics import CITIES_CONFIG
-from components import CapitalSelector, LiveMapView
+from components import ModernDropdownMultiselect, PremiumMapView
+
+ctk.set_appearance_mode("Light")
+ctk.set_default_color_theme("blue")
 
 
-class TravelIntelligenceApp(tk.Tk):
+class TravelIntelligenceApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Travel Intelligence Engine - Panel Menadżerski")
-        self.geometry("1100x650")
-        self.minimum_size_width = 1100
-        self.minimum_size_height = 650
+        self.title("Travel Intelligence Engine - Dashboard Menadżerski Pro")
+        self.geometry("1250x750")
 
-        # Stylizacja interfejsu (Clam dla nowoczesnego wyglądu systemowego)
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
-
-        # --- UKŁAD OKNA (Główny Grid) ---
-        # Lewy panel sterowania (szerokość stała), prawy panel z mapą (elastyczny)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # 1. LEWY PANEL (FORMULARZ)
-        self.left_panel = ttk.Frame(self, padding=15)
-        self.left_panel.grid(row=0, column=0, sticky="nsew")
+        # 1. PANEL FORMULARZA (LEWY)
+        self.left_panel = ctk.CTkFrame(self, width=340, corner_radius=0, fg_color="#ffffff")
+        self.left_panel.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+        self.left_panel.pack_propagate(False)
 
-        # Suwak: Waga Budżetu
-        ttk.Label(self.left_panel, text="Priorytet Niskich Kosztów (Budżet):", font=("Arial", 10, "bold")).pack(
-            anchor="w", pady=(0, 2))
-        self.budget_slider = tk.Scale(self.left_panel, from_=1.0, to=5.0, resolution=0.5, orient="horizontal",
-                                      fg="#2c3e50")
+        lbl_title = ctk.CTkLabel(self.left_panel, text="Travel Engine Pro", font=("Segoe UI", 22, "bold"),
+                                 text_color="#2c3e50")
+        lbl_title.pack(anchor="w", padx=25, pady=(30, 5))
+        lbl_subtitle = ctk.CTkLabel(self.left_panel, text="System Optymalizacji Podróży", font=("Segoe UI", 12),
+                                    text_color="#7f8c8d")
+        lbl_subtitle.pack(anchor="w", padx=25, pady=(0, 25))
+
+        self.btn_analyze = ctk.CTkButton(
+            self.left_panel, text="URUCHOM ANALIZĘ RYNKU",
+            font=("Segoe UI", 13, "bold"), height=45, corner_radius=8,
+            fg_color="#273746", hover_color="#1c2833",
+            command=self.wykonaj_analize
+        )
+        self.btn_analyze.pack(side="bottom", fill="x", padx=25, pady=30)
+
+        self.form_container = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        self.form_container.pack(fill="both", expand=True, padx=25)
+
+        # Suwaki priorytetów
+        ctk.CTkLabel(self.form_container, text="Waga Priorytetu: Budżet", font=("Segoe UI", 11, "bold"),
+                     text_color="#34495e").pack(anchor="w", pady=(0, 5))
+        self.budget_slider = ctk.CTkSlider(self.form_container, from_=1.0, to=5.0, number_of_steps=8,
+                                           button_color="#2980b9", button_hover_color="#3498db")
         self.budget_slider.set(3.0)
-        self.budget_slider.pack(fill="x", pady=(0, 15))
+        self.budget_slider.pack(fill="x", pady=(0, 20))
 
-        # Suwak: Waga Komfortu
-        ttk.Label(self.left_panel, text="Priorytet Standardu (Komfort):", font=("Arial", 10, "bold")).pack(anchor="w",
-                                                                                                           pady=(0, 2))
-        self.comfort_slider = tk.Scale(self.left_panel, from_=1.0, to=5.0, resolution=0.5, orient="horizontal",
-                                       fg="#2c3e50")
+        ctk.CTkLabel(self.form_container, text="Waga Priorytetu: Komfort", font=("Segoe UI", 11, "bold"),
+                     text_color="#34495e").pack(anchor="w", pady=(0, 5))
+        self.comfort_slider = ctk.CTkSlider(self.form_container, from_=1.0, to=5.0, number_of_steps=8,
+                                            button_color="#2980b9", button_hover_color="#3498db")
         self.comfort_slider.set(3.0)
-        self.comfort_slider.pack(fill="x", pady=(0, 15))
+        self.comfort_slider.pack(fill="x", pady=(0, 20))
 
-        # Komponent wyboru miast (zaciąga klucze z CITIES_CONFIG)
-        self.selector = CapitalSelector(self.left_panel, list(CITIES_CONFIG.keys()))
-        self.selector.pack(fill="both", expand=True, pady=(0, 15))
+        # Rozwijany, inteligentny Multiselect
+        ctk.CTkLabel(self.form_container, text="Zakres Geograficzny Analizy", font=("Segoe UI", 11, "bold"),
+                     text_color="#34495e").pack(anchor="w", pady=(0, 5))
 
-        # Przycisk uruchomienia analizy rynkowej
-        self.btn_analyze = ttk.Button(self.left_panel, text="URUCHOM ANALIZĘ", command=self.wykonaj_analize)
-        self.btn_analyze.pack(fill="x", ipady=10)
+        self.selector = ModernDropdownMultiselect(self.form_container, list(CITIES_CONFIG.keys()))
+        self.selector.pack(fill="x", pady=(0, 15))
+        self.selector.btn_toggle.configure(command=self.bezpieczny_toggle_listy)
 
-        # 2. PRAWY PANEL (ŻYWA MAPA)
-        self.map_view = LiveMapView(self)
-        self.map_view.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        # PANEL WERDYKTU SYSTEMOWEGO
+        self.verdict_frame = ctk.CTkFrame(self.form_container, fg_color="#f8f9fa", border_width=1,
+                                          border_color="#e2e8f0", corner_radius=8)
+        self.verdict_frame.pack(fill="x", pady=(10, 0), ipady=15)
+
+        self.lbl_verdict_title = ctk.CTkLabel(self.verdict_frame, text="Rekomendacja Systemowa",
+                                              font=("Segoe UI", 11, "bold"), text_color="#7f8c8d")
+        self.lbl_verdict_title.pack(anchor="w", padx=15, pady=(10, 2))
+
+        self.lbl_verdict_val = ctk.CTkLabel(self.verdict_frame, text="Oczekiwanie na analizę...",
+                                            font=("Segoe UI", 14, "italic"), text_color="#94a3b8")
+        self.lbl_verdict_val.pack(anchor="w", padx=15)
+
+        # 2. PANEL MAPY (PRAWY)
+        self.map_view = PremiumMapView(self)
+        self.map_view.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+
+    def bezpieczny_toggle_listy(self):
+        self.selector.toggle_dropdown()
+        if self.selector.is_open:
+            self.verdict_frame.pack_forget()
+        else:
+            self.verdict_frame.pack(fill="x", pady=(10, 0), ipady=15)
 
     def wykonaj_analize(self):
-        """Pobiera parametry z GUI, odpytuje lokalne API i nanosi wyniki na mapę."""
+        if self.selector.is_open:
+            self.bezpieczny_toggle_listy()
+
         wybrane_miasta = self.selector.get_selected_cities()
 
         if not wybrane_miasta:
-            messagebox.showwarning("Brak danych", "Zaznacz przynajmniej jedną stolicę z listy!")
+            messagebox.showwarning("Brak danych", "Zaznacz przynajmniej jedną stolicę z rozwijanej listy!")
             return
 
-        # Przygotowanie paczki JSON dla serwera FastAPI
-        # Terminy ustawione sztywno na wrzesień 2026 (zgodnie z planem wakacyjnym)
         payload = {
             "cities": wybrane_miasta,
             "arrival_date": "2026-09-03",
             "departure_date": "2026-09-13",
-            "budget_weight": float(self.budget_slider.get()),
-            "comfort_weight": float(self.comfort_slider.get())
+            "budget_weight": round(float(self.budget_slider.get()), 1),
+            "comfort_weight": round(float(self.comfort_slider.get()), 1)
         }
 
-        # Czyszczenie starych pinezek przed rysowaniem nowych
         self.map_view.clear_markers()
+        self.lbl_verdict_val.configure(text="Obliczanie danych...", text_color="#e67e22", font=("Segoe UI", 14, "bold"))
+        self.update_idletasks()
 
         try:
-            # Wysyłamy żądanie POST do działającego w tle backendu na localhoście
-            response = requests.post("http://127.0.0.1:8000/api/analiza", json=payload, timeout=15)
+            response = requests.post("http://127.0.0.1:8000/api/analiza", json=payload, timeout=60)
 
             if response.status_code == 200:
                 json_res = response.json()
                 data_dict = json_res.get("data", {})
 
-                # Iterujemy po miastach, które przysłał nam serwer
+                if not data_dict:
+                    self.lbl_verdict_val.configure(text="Brak wyników", text_color="#7f8c8d")
+                    return
+
+                best_city = None
+                max_score = -1.0
+
+                for city, metrics in data_dict.items():
+                    if metrics["iaw_score"] > max_score:
+                        max_score = metrics["iaw_score"]
+                        best_city = city
+
                 for city, metrics in data_dict.items():
                     lat, lon = metrics["coords"]
+                    is_best = (city == best_city)
 
-                    # Dodanie dynamicznej pinezki na mapie OpenStreetMap
                     self.map_view.add_city_marker(
                         city_name=city,
                         lat=lat,
                         lon=lon,
                         iaw_score=metrics["iaw_score"],
                         price=metrics["mean_hotel_price"],
-                        flight=metrics["min_flight_price"]
+                        flight=metrics["min_flight_price"],
+                        is_best=is_best
                     )
 
-                messagebox.showinfo("Sukces", f"Analiza ukończona! Przetworzono miast: {len(data_dict)}")
+                self.lbl_verdict_val.configure(
+                    text=f"🥇 {best_city} ({max_score}/100 pkt)",
+                    text_color="#2980b9",
+                    font=("Segoe UI", 15, "bold")
+                )
+                messagebox.showinfo("Sukces", f"Analiza ukończona! Rekomendowany cel: {best_city}")
             else:
-                messagebox.onerror("Błąd serwera", f"API zwróciło kod błędu: {response.status_code}")
+                messagebox.showerror("Błąd serwera", f"API zwróciło kod błędu: {response.status_code}")
+                self.lbl_verdict_val.configure(text="Błąd analizy", text_color="#e74c3c")
 
+        except requests.exceptions.Timeout:
+            messagebox.showwarning("Timeout", "Serwer potrzebuje więcej czasu.")
+            self.lbl_verdict_val.configure(text="Przekroczono czas", text_color="#e74c3c")
         except requests.exceptions.ConnectionError:
-            messagebox.showerror("Błąd komunikacji",
-                                 "Nie można połączyć się z backendem!\nUpewnij się, że plik backend/main.py jest uruchomiony.")
+            messagebox.showerror("Błąd", "Brak połączenia z backend/main.py!")
+            self.lbl_verdict_val.configure(text="Brak połączenia", text_color="#e74c3c")
 
 
 if __name__ == "__main__":
