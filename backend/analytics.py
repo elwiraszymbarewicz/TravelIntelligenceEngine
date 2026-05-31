@@ -97,7 +97,6 @@ def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
     if df_hotels.empty:
         return None
 
-    # PEŁNA INTEGRACJA LOTÓW Z FORMULARZA
     flight_params = {"from_airport": "BER", "to_airport": config["airport"], "date": arrival_date,
                      "currency_code": "PLN"}
     min_flight_price = 0.0
@@ -111,7 +110,6 @@ def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
     except Exception:
         pass
 
-    # Jeśli API zwraca błąd, wyliczamy zbilansowany szacunek bazowy dla Europy, żeby nie pokazywać 0 PLN na wykresie
     if min_flight_price <= 0:
         min_flight_price = 380.0
 
@@ -137,9 +135,7 @@ def calculate_iaw_index(city_data: dict, budget_weight: float, comfort_weight: f
     mean_stars = np.mean(stars)
     mean_rating = np.mean(ratings)
 
-    # LOT JEST TU BEZWZGLĘDNIE DODAWANY DO ŁĄCZNEJ SUMY
     total_cost = flight_price + mean_hotel_price
-
     budget_usage = total_cost / user_budget
 
     if total_cost <= user_budget:
@@ -157,7 +153,6 @@ def calculate_iaw_index(city_data: dict, budget_weight: float, comfort_weight: f
 
     final_iaw = ((cost_score * budget_weight) + (comfort_score * comfort_weight)) / total_weights
 
-    # Blokada: miasto poza budżetem zawsze ląduje niżej
     if total_cost > user_budget:
         final_iaw = final_iaw * 0.5
 

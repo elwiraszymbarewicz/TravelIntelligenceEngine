@@ -40,7 +40,7 @@ class TravelIntelligenceApp(ctk.CTk):
             self.left_panel, text="URUCHOM ANALIZĘ RYNKU",
             font=("Segoe UI", 13, "bold"), height=45, corner_radius=8,
             fg_color="#273746", hover_color="#1c2833",
-            command=self.wykonaj_analize
+            command=self.execute_analysis
         )
         self.btn_analyze.pack(side="bottom", fill="x", padx=25, pady=30)
 
@@ -54,7 +54,6 @@ class TravelIntelligenceApp(ctk.CTk):
         self.ent_budget.insert(0, "4500")
         self.ent_budget.pack(fill="x", pady=(0, 15))
 
-        # AKTUALNY PRZEDZIAŁ CZASOWY (OKNO MAX 3 MIESIĘCY OD DZIŚ)
         ctk.CTkLabel(self.form_container, text="Ramy czasowe podróży (YYYY-MM-DD):", font=("Segoe UI", 11, "bold"),
                      text_color="#34495e").pack(anchor="w", pady=(0, 5))
 
@@ -63,7 +62,6 @@ class TravelIntelligenceApp(ctk.CTk):
         self.date_frame.grid_columnconfigure(0, weight=1)
         self.date_frame.grid_columnconfigure(1, weight=1)
 
-        # Dzisiejsza data to 30 maja 2026. Ustawiamy domyślny, bezpieczny, bliski termin (np. 15 czerwca)
         self.ent_arrival = ctk.CTkEntry(self.date_frame, placeholder_text="Od: YYYY-MM-DD", font=("Segoe UI", 11),
                                         height=32)
         self.ent_arrival.insert(0, "2026-06-15")
@@ -92,7 +90,7 @@ class TravelIntelligenceApp(ctk.CTk):
                      text_color="#34495e").pack(anchor="w", pady=(0, 5))
         self.selector = ModernDropdownMultiselect(self.form_container, list(CITIES_CONFIG.keys()))
         self.selector.pack(fill="x", pady=(0, 15))
-        self.selector.btn_toggle.configure(command=self.bezpieczny_toggle_listy)
+        self.selector.btn_toggle.configure(command=self.safe_toggle_dropdown_list)
 
         self.verdict_frame = ctk.CTkFrame(self.form_container, fg_color="#f8f9fa", border_width=1,
                                           border_color="#e2e8f0", corner_radius=8)
@@ -109,19 +107,19 @@ class TravelIntelligenceApp(ctk.CTk):
         self.map_view = PremiumMapView(self)
         self.map_view.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
 
-    def bezpieczny_toggle_listy(self):
+    def safe_toggle_dropdown_list(self):
         self.selector.toggle_dropdown()
         if self.selector.is_open:
             self.verdict_frame.pack_forget()
         else:
             self.verdict_frame.pack(fill="x", pady=(10, 0), ipady=15)
 
-    def wykonaj_analize(self):
+    def execute_analysis(self):
         if self.selector.is_open:
-            self.bezpieczny_toggle_listy()
+            self.safe_toggle_dropdown_list()
 
-        wybrane_miasta = self.selector.get_selected_cities()
-        if not wybrane_miasta:
+        selected_cities = self.selector.get_selected_cities()
+        if not selected_cities:
             messagebox.showwarning("Brak danych", "Zaznacz przynajmniej jedną stolicę z rozwijanej listy!")
             return
 
@@ -141,7 +139,6 @@ class TravelIntelligenceApp(ctk.CTk):
             messagebox.showerror("Zły format daty", "Daty muszą być wpisane w formacie YYYY-MM-DD (np. 2026-06-15)!")
             return
 
-        # --- WALIDACJA OKNA 3 MIESIĘCY OD DZIŚ (PRODUKCYJNY STANDARD RESTRYKCJI) ---
         try:
             arrival_date = datetime.strptime(arrival_str, "%Y-%m-%d")
             departure_date = datetime.strptime(departure_str, "%Y-%m-%d")
@@ -157,7 +154,6 @@ class TravelIntelligenceApp(ctk.CTk):
                 messagebox.showerror(
                     "Przekroczono limit okna czasowego",
                     "Aplikacja ogranicza zakres wyszukiwania do maksymalnie 3 miesięcy od dziś.\n\n"
-                    "Wybierz daty mieszczące się w okresie do końca sierpnia 2026 roku!"
                 )
                 return
 
@@ -170,7 +166,7 @@ class TravelIntelligenceApp(ctk.CTk):
             return
 
         payload = {
-            "cities": wybrane_miasta,
+            "cities": selected_cities,
             "arrival_date": arrival_str,
             "departure_date": departure_str,
             "budget_weight": round(float(self.budget_slider.get()), 1),
@@ -217,18 +213,18 @@ class TravelIntelligenceApp(ctk.CTk):
                         is_best=is_best
                     )
 
-                zwyciezca_metrics = data_dict[best_city]
-                laczny_koszt = zwyciezca_metrics["mean_hotel_price"] + zwyciezca_metrics["min_flight_price"]
+                best_city_metrics = data_dict[best_city]
+                total_travel_cost = best_city_metrics["mean_hotel_price"] + best_city_metrics["min_flight_price"]
 
-                if laczny_koszt > user_budget:
-                    brakujaca_kwota = int(laczny_koszt - user_budget)
+                if total_travel_cost > user_budget:
+                    missing_budget_amount = int(total_travel_cost - user_budget)
                     self.lbl_verdict_val.configure(
-                        text=f"🥇 {best_city} ({max_score}/100 pkt)\n⚠️ Przekracza budżet o {brakujaca_kwota} PLN!",
+                        text=f"🥇 {best_city} ({max_score}/100 pkt)\n⚠️ Przekracza budżet o {missing_budget_amount} PLN!",
                         text_color="#e74c3c", font=("Segoe UI", 13, "bold")
                     )
                 else:
                     self.lbl_verdict_val.configure(
-                        text=f"🥇 {best_city} ({max_score}/100 pkt)\nKoszt: {int(laczny_koszt)} PLN (W budżecie)",
+                        text=f"🥇 {best_city} ({max_score}/100 pkt)\nKoszt: {int(total_travel_cost)} PLN (W budżecie)",
                         text_color="#2980b9", font=("Segoe UI", 13, "bold")
                     )
 

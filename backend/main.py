@@ -8,7 +8,7 @@ from analytics import fetch_city_data, calculate_iaw_index, CITIES_CONFIG
 app = FastAPI(title="Travel Intelligence Engine API", version="1.2.0")
 
 
-class AnalizaRequest(BaseModel):
+class AnalysisRequest(BaseModel):
     cities: List[str]
     arrival_date: str
     departure_date: str
@@ -18,7 +18,7 @@ class AnalizaRequest(BaseModel):
 
 
 @app.post("/api/analiza")
-def uruchom_analize_rynku(request: AnalizaRequest):
+def run_market_analysis(request: AnalysisRequest):
     if not request.cities:
         raise HTTPException(status_code=400, detail="Lista stolic nie może być pusta.")
 
