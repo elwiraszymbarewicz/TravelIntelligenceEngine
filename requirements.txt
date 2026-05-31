@@ -1,8 +1,8 @@
 fastapi
+pydantic
 uvicorn
 requests
 pandas
 numpy
-matplotlib
-tkintermapview
 customtkinter
+tkintermapview

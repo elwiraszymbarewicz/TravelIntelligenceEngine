@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from backend.analytics import CITIES_CONFIG
-from components import ModernDropdownMultiselect, PremiumMapView
+from components import ModernDropdownMultiselect, PremiumMapView, MarketReportPopup
 
 ctk.set_appearance_mode("Light")
 ctk.set_default_color_theme("blue")
@@ -98,13 +98,13 @@ class TravelIntelligenceApp(ctk.CTk):
 
         self.lbl_verdict_title = ctk.CTkLabel(self.verdict_frame, text="Rekomendacja Systemowa",
                                               font=("Segoe UI", 11, "bold"), text_color="#7f8c8d")
-        self.lbl_verdict_title.pack(anchor="w", padx=15, pady=(10, 2))
+        self.lbl_verdict_title.pack(anchor="w", padx=15, pady=(5, 2))
 
         self.lbl_verdict_val = ctk.CTkLabel(self.verdict_frame, text="Oczekiwanie na analizę...",
-                                            font=("Segoe UI", 13, "italic"), text_color="#94a3b8")
+                                            font=("Segoe UI", 12, "italic"), text_color="#94a3b8")
         self.lbl_verdict_val.pack(anchor="w", padx=15)
 
-        self.map_view = PremiumMapView(self)
+        self.map_view = PremiumMapView(self, app_instance=self)
         self.map_view.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
 
     def safe_toggle_dropdown_list(self):
@@ -154,6 +154,7 @@ class TravelIntelligenceApp(ctk.CTk):
                 messagebox.showerror(
                     "Przekroczono limit okna czasowego",
                     "Aplikacja ogranicza zakres wyszukiwania do maksymalnie 3 miesięcy od dziś.\n\n"
+                    "Wybierz daty mieszczące się w okresie do końca sierpnia 2026 roku!"
                 )
                 return
 
@@ -162,20 +163,17 @@ class TravelIntelligenceApp(ctk.CTk):
                                      "Data rozpoczęcia podróży nie może być późniejsza niż data powrotu!")
                 return
         except ValueError:
-            messagebox.showerror("Błąd", "Niepoprawna struktura daty. Sprawdź kalendarz!")
+            messagebox.showerror("Błąd", "Niepoprawna datacja systemowa!")
             return
 
         payload = {
-            "cities": selected_cities,
-            "arrival_date": arrival_str,
-            "departure_date": departure_str,
+            "cities": selected_cities, "arrival_date": arrival_str, "departure_date": departure_str,
             "budget_weight": round(float(self.budget_slider.get()), 1),
-            "comfort_weight": round(float(self.comfort_slider.get()), 1),
-            "user_budget": user_budget
+            "comfort_weight": round(float(self.comfort_slider.get()), 1), "user_budget": user_budget
         }
 
         self.map_view.clear_markers()
-        self.lbl_verdict_val.configure(text="Obliczanie danych...", text_color="#e67e22", font=("Segoe UI", 13, "bold"))
+        self.lbl_verdict_val.configure(text="Obliczanie danych...", text_color="#e67e22", font=("Segoe UI", 12, "bold"))
         self.update_idletasks()
 
         try:
@@ -187,8 +185,6 @@ class TravelIntelligenceApp(ctk.CTk):
 
                 if not data_dict:
                     self.lbl_verdict_val.configure(text="Brak wolnych miejsc", text_color="#7f8c8d")
-                    messagebox.showinfo("Brak ofert",
-                                        "W wybranym terminie hotele w wybranych miastach nie posiadają wolnych pokoi.")
                     return
 
                 best_city = None
@@ -201,44 +197,32 @@ class TravelIntelligenceApp(ctk.CTk):
 
                 for city, metrics in data_dict.items():
                     lat, lon = metrics["coords"]
-                    is_best = (city == best_city)
-
                     self.map_view.add_city_marker(
-                        city_name=city,
-                        lat=lat,
-                        lon=lon,
-                        iaw_score=metrics["iaw_score"],
-                        price=metrics["mean_hotel_price"],
-                        flight=metrics["min_flight_price"],
-                        is_best=is_best
+                        city_name=city, lat=lat, lon=lon,
+                        iaw_score=metrics["iaw_score"], price=metrics["mean_hotel_price"],
+                        flight=metrics["min_flight_price"], is_best=(city == best_city)
                     )
 
                 best_city_metrics = data_dict[best_city]
                 total_travel_cost = best_city_metrics["mean_hotel_price"] + best_city_metrics["min_flight_price"]
 
                 if total_travel_cost > user_budget:
-                    missing_budget_amount = int(total_travel_cost - user_budget)
+                    missing_amount = int(total_travel_cost - user_budget)
                     self.lbl_verdict_val.configure(
-                        text=f"🥇 {best_city} ({max_score}/100 pkt)\n⚠️ Przekracza budżet o {missing_budget_amount} PLN!",
-                        text_color="#e74c3c", font=("Segoe UI", 13, "bold")
+                        text=f"🥇 {best_city} ({max_score}/100 pkt)\n⚠️ Przekracza budżet o {missing_amount} PLN!",
+                        text_color="#e74c3c", font=("Segoe UI", 12, "bold")
                     )
                 else:
                     self.lbl_verdict_val.configure(
                         text=f"🥇 {best_city} ({max_score}/100 pkt)\nKoszt: {int(total_travel_cost)} PLN (W budżecie)",
-                        text_color="#2980b9", font=("Segoe UI", 13, "bold")
+                        text_color="#2980b9", font=("Segoe UI", 12, "bold")
                     )
 
                 messagebox.showinfo("Sukces", f"Analiza ukończona! Najlepszy cel podróży: {best_city}")
             else:
                 messagebox.showerror("Błąd serwera", f"API zwróciło kod błędu: {response.status_code}")
-                self.lbl_verdict_val.configure(text="Błąd analizy", text_color="#e74c3c")
-
-        except requests.exceptions.Timeout:
-            messagebox.showwarning("Timeout", "Serwer potrzebuje więcej czasu.")
-            self.lbl_verdict_val.configure(text="Przekroczono czas", text_color="#e74c3c")
-        except requests.exceptions.ConnectionError:
-            messagebox.showerror("Błąd", "Brak połączenia z backend/main.py!")
-            self.lbl_verdict_val.configure(text="Brak połączenia", text_color="#e74c3c")
+        except Exception as e:
+            messagebox.showerror("Błąd", "Brak połączenia z backendem!")
 
 
 if __name__ == "__main__":

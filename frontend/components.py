@@ -1,6 +1,8 @@
 import tkinter as tk
 import customtkinter as ctk
 import tkintermapview
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class ModernDropdownMultiselect(ctk.CTkFrame):
@@ -67,10 +69,69 @@ class ModernDropdownMultiselect(ctk.CTkFrame):
         return [city for city in self.cities_list if self.checkbox_vars[city].get()]
 
 
+class MarketReportPopup(ctk.CTkToplevel):
+    def __init__(self, parent, title_text, info_text, hotel_price, flight_price):
+        super().__init__(parent)
+
+        self.title(title_text)
+        self.geometry("460x420")
+        self.resizable(False, False)
+        self.configure(fg_color="#f8f9fa")
+
+        self.transient(parent)
+        self.grab_set()
+
+        self.update_idletasks()
+        parent_x = parent.winfo_x()
+        parent_y = parent.winfo_y()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+
+        popup_width = 460
+        popup_height = 420
+
+        center_x = parent_x + (parent_width // 2) - (popup_width // 2)
+        center_y = parent_y + (parent_height // 2) - (popup_height // 2)
+        self.geometry(f"{popup_width}x{popup_height}+{center_x}+{center_y}")
+
+        lbl_info = ctk.CTkLabel(
+            self, text=info_text, font=("Segoe UI", 12),
+            justify="left", text_color="#2c3e50"
+        )
+        lbl_info.pack(padx=25, pady=(20, 10), anchor="w")
+
+        chart_frame = ctk.CTkFrame(self, fg_color="transparent")
+        chart_frame.pack(fill="both", expand=True, padx=25, pady=(0, 15))
+
+        fig = Figure(figsize=(4, 2), dpi=100, facecolor="#f8f9fa")
+        ax = fig.add_subplot(111)
+
+        labels = ['Hotel', 'Lot']
+        sizes = [hotel_price, flight_price]
+        colors = ['#2980b9', '#e67e22']
+
+        ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90,
+               textprops={'fontsize': 9, 'fontname': 'Segoe UI', 'weight': 'bold'})
+        ax.axis('equal')
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=chart_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+
+        btn_close = ctk.CTkButton(
+            self, text="ZAMKNIJ", font=("Segoe UI", 11, "bold"),
+            fg_color="#34495e", hover_color="#2c3e50", height=35,
+            command=self.destroy
+        )
+        btn_close.pack(pady=(0, 20), padx=25, fill="x")
+
+
 class PremiumMapView(ctk.CTkFrame):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, app_instance, **kwargs):
         super().__init__(parent, corner_radius=15, **kwargs)
 
+        self.app_instance = app_instance
         self.map_widget = tkintermapview.TkinterMapView(self, corner_radius=15)
         self.map_widget.pack(fill="both", expand=True, padx=2, pady=2)
         self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png")
@@ -84,7 +145,13 @@ class PremiumMapView(ctk.CTkFrame):
         self.markers.clear()
 
     def on_marker_click(self, marker):
-        tk.messagebox.showinfo("Raport Rynkowy", marker.data)
+        MarketReportPopup(
+            parent=self.app_instance,
+            title_text="Raport Rynkowy",
+            info_text=marker.report_text,
+            hotel_price=marker.hotel_price,
+            flight_price=marker.flight_price
+        )
 
     def add_city_marker(self, city_name, lat, lon, iaw_score, price, flight, is_best=False):
         prefix = "🏆 REKOMENDACJA SYSTEMOWA 🏆\n" if is_best else ""
@@ -102,16 +169,12 @@ class PremiumMapView(ctk.CTkFrame):
                 lat, lon, marker_color_circle="#ffffff", marker_color_outside="#2980b9", command=self.on_marker_click
             )
         else:
-            if iaw_score >= 75:
-                marker_color = "#2ecc71"
-            elif iaw_score >= 45:
-                marker_color = "#f39c12"
-            else:
-                marker_color = "#e74c3c"
-
+            marker_color = "#2ecc71" if iaw_score >= 75 else ("#f39c12" if iaw_score >= 45 else "#e74c3c")
             new_marker = self.map_widget.set_marker(
                 lat, lon, marker_color_circle="#ffffff", marker_color_outside=marker_color, command=self.on_marker_click
             )
 
-        new_marker.data = info_text
+        new_marker.report_text = info_text
+        new_marker.hotel_price = price
+        new_marker.flight_price = flight
         self.markers.append(new_marker)
