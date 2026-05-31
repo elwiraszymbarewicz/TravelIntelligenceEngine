@@ -52,7 +52,7 @@ CITIES_CONFIG = {
 }
 
 API_HEADERS = {
-    'x-rapidapi-key': "0bd124c3b1msh9d92859441a99dfp11983ajsn8c3145875992",
+    'x-rapidapi-key': "15f84234f2msh27775c0e0c0592bp1b7334jsn758d3e65313e",
     'x-rapidapi-host': "booking-com15.p.rapidapi.com"
 }
 
@@ -93,7 +93,16 @@ def fetch_city_data(city_name: str, arrival_date: str, departure_date: str):
     except Exception:
         return None
 
-    df_hotels = pd.DataFrame(hotel_list).dropna(subset=['price'])
+    if not hotel_list:
+        return None
+
+    df_hotels = pd.DataFrame(hotel_list)
+
+    if 'price' not in df_hotels.columns:
+        return None
+
+    df_hotels = df_hotels.dropna(subset=['price'])
+
     if df_hotels.empty:
         return None
 
